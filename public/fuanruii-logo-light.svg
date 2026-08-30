@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="120" viewBox="0 0 500 120" fill="none">
+  <g transform="translate(5 5)">
+    <path d="M55 0 100 18v35c0 30-18 51-45 62C28 104 10 83 10 53V18L55 0Z" fill="#0C1714" stroke="#91F3CE" stroke-width="3"/>
+    <path d="M31 36 55 23l24 13v30L55 79 31 66V36Z" stroke="#91F3CE" stroke-width="3"/>
+    <circle cx="55" cy="51" r="14" stroke="#F5FFF9" stroke-width="3"/>
+    <circle cx="55" cy="51" r="5" fill="#91F3CE"/>
+  </g>
+  <text x="132" y="60" fill="#F5FFF9" font-family="Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="7">FUANRUII</text>
+  <text x="136" y="89" fill="#91F3CE" font-family="Arial, sans-serif" font-size="13" font-weight="600" letter-spacing="9">SECURITY</text>
+</svg>
