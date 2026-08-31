@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import {
   ArrowDownRight,
   ArrowRight,
@@ -40,6 +40,9 @@ const content = {
     live: 'VISION CORE / 在线',
     detection: '人物与车辆识别',
     response: '< 0.3 秒事件响应',
+    touchHint: '按住画面 · 移动扫描',
+    swipeHint: '左右滑动探索',
+    quickQuote: '微信询价',
     sectionEyebrow: 'Fuanruii Vision Platform',
     sectionTitle: '一套视觉系统，覆盖每一种重要场景。',
     sectionIntro:
@@ -70,6 +73,9 @@ const content = {
     live: 'VISION CORE / ONLINE',
     detection: 'Human & vehicle detection',
     response: '< 0.3 sec event response',
+    touchHint: 'HOLD · MOVE TO SCAN',
+    swipeHint: 'Swipe to explore',
+    quickQuote: 'WeChat quote',
     sectionEyebrow: 'Fuanruii Vision Platform',
     sectionTitle: 'One vision system. Every critical environment.',
     sectionIntro:
@@ -141,18 +147,148 @@ function scrollTo(id: string) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
 }
 
+function setCardMotion(event: ReactPointerEvent<HTMLElement>) {
+  if (event.pointerType !== 'mouse') return;
+  const rect = event.currentTarget.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / rect.width - 0.5;
+  const y = (event.clientY - rect.top) / rect.height - 0.5;
+  event.currentTarget.style.setProperty('--card-x', `${x * 9}deg`);
+  event.currentTarget.style.setProperty('--card-y', `${y * -7}deg`);
+  event.currentTarget.style.setProperty('--card-light-x', `${(x + 0.5) * 100}%`);
+  event.currentTarget.style.setProperty('--card-light-y', `${(y + 0.5) * 100}%`);
+}
+
+function resetCardMotion(event: ReactPointerEvent<HTMLElement>) {
+  event.currentTarget.style.setProperty('--card-x', '0deg');
+  event.currentTarget.style.setProperty('--card-y', '0deg');
+}
+
 export default function Home() {
   const [language, setLanguage] = useState<Language>('zh');
+  const [copied, setCopied] = useState(false);
+  const shellRef = useRef<HTMLElement>(null);
   const t = content[language];
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    let frame = 0;
+    let currentX = window.innerWidth * 0.72;
+    let currentY = window.innerHeight * 0.42;
+    let targetX = currentX;
+    let targetY = currentY;
+    let touchTimer = 0;
+    const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    const hero = shell.querySelector<HTMLElement>('.hero-section');
+
+    const updatePointer = (event: PointerEvent) => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+      shell.style.setProperty('--pointer-x', `${(event.clientX / window.innerWidth - 0.5) * 2}`);
+      shell.style.setProperty('--pointer-y', `${(event.clientY / window.innerHeight - 0.5) * 2}`);
+    };
+
+    const updateScroll = () => {
+      const progress = Math.min(window.scrollY / Math.max(window.innerHeight, 1), 1);
+      shell.style.setProperty('--hero-progress', progress.toFixed(3));
+      shell.classList.toggle('header-compact', window.scrollY > 70);
+    };
+
+    const renderPointer = () => {
+      currentX += (targetX - currentX) * 0.12;
+      currentY += (targetY - currentY) * 0.12;
+      shell.style.setProperty('--mouse-x', `${currentX}px`);
+      shell.style.setProperty('--mouse-y', `${currentY}px`);
+      frame = window.requestAnimationFrame(renderPointer);
+    };
+
+    const updateTouchScan = (event: PointerEvent) => {
+      if (!hero || event.pointerType === 'mouse') return;
+      const rect = hero.getBoundingClientRect();
+      const x = Math.min(Math.max(event.clientX - rect.left, 24), rect.width - 24);
+      const y = Math.min(Math.max(event.clientY - rect.top, 90), rect.height - 50);
+      const pointerX = (x / Math.max(rect.width, 1) - 0.5) * 2;
+      const pointerY = (y / Math.max(rect.height, 1) - 0.5) * 2;
+
+      shell.style.setProperty('--touch-x', `${x}px`);
+      shell.style.setProperty('--touch-y', `${y}px`);
+      shell.style.setProperty('--pointer-x', pointerX.toFixed(3));
+      shell.style.setProperty('--pointer-y', pointerY.toFixed(3));
+      shell.classList.add('touch-scanning');
+      window.clearTimeout(touchTimer);
+    };
+
+    const endTouchScan = () => {
+      window.clearTimeout(touchTimer);
+      touchTimer = window.setTimeout(() => shell.classList.remove('touch-scanning'), 480);
+    };
+
+    const interactive = shell.querySelectorAll('a, button, .category-card, .product-card');
+    const revealElements = shell.querySelectorAll('.reveal');
+    const activateCursor = () => shell.classList.add('cursor-active');
+    const deactivateCursor = () => shell.classList.remove('cursor-active');
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach((entry) => entry.target.classList.toggle('in-view', entry.isIntersecting)),
+      { threshold: 0.12 },
+    );
+
+    if (finePointer) {
+      interactive.forEach((element) => {
+        element.addEventListener('pointerenter', activateCursor);
+        element.addEventListener('pointerleave', deactivateCursor);
+      });
+      window.addEventListener('pointermove', updatePointer, { passive: true });
+      frame = window.requestAnimationFrame(renderPointer);
+    } else if (hero) {
+      hero.addEventListener('pointerdown', updateTouchScan, { passive: true });
+      hero.addEventListener('pointermove', updateTouchScan, { passive: true });
+      hero.addEventListener('pointerup', endTouchScan, { passive: true });
+      hero.addEventListener('pointercancel', endTouchScan, { passive: true });
+    }
+    window.addEventListener('scroll', updateScroll, { passive: true });
+    revealElements.forEach((element) => observer.observe(element));
+    updateScroll();
+    const introFrame = window.requestAnimationFrame(() => shell.classList.add('site-ready'));
+
+    return () => {
+      if (finePointer) {
+        interactive.forEach((element) => {
+          element.removeEventListener('pointerenter', activateCursor);
+          element.removeEventListener('pointerleave', deactivateCursor);
+        });
+        window.removeEventListener('pointermove', updatePointer);
+      } else if (hero) {
+        hero.removeEventListener('pointerdown', updateTouchScan);
+        hero.removeEventListener('pointermove', updateTouchScan);
+        hero.removeEventListener('pointerup', endTouchScan);
+        hero.removeEventListener('pointercancel', endTouchScan);
+      }
+      window.removeEventListener('scroll', updateScroll);
+      observer.disconnect();
+      window.clearTimeout(touchTimer);
+      window.cancelAnimationFrame(introFrame);
+      if (frame) window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  }, [language]);
+
+  const copyWechat = async () => {
+    await navigator.clipboard?.writeText('miki-zeng');
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+  };
 
   return (
     <main
+      ref={shellRef}
       className="site-shell"
-      onMouseMove={(event) => {
-        event.currentTarget.style.setProperty('--mouse-x', `${event.clientX}px`);
-        event.currentTarget.style.setProperty('--mouse-y', `${event.clientY}px`);
-      }}
     >
+      <div className="cursor-dot" aria-hidden="true" />
+      <div className="cursor-orbit" aria-hidden="true"><span>VIEW</span></div>
       <header className="site-header">
         <a href="#top" className="brand-lockup" aria-label="Fuanruii Security home">
           <img src="/logo-mark.svg" alt="" className="brand-mark" />
@@ -188,6 +324,19 @@ export default function Home() {
       <section id="top" className="hero-section">
         <div className="hero-media" aria-hidden="true" />
         <div className="hero-grain" aria-hidden="true" />
+        <div className="hero-grid" aria-hidden="true" />
+        <div className="touch-target" aria-hidden="true">
+          <i />
+          <span>{t.touchHint}</span>
+        </div>
+        <div className="hero-ghost-type" aria-hidden="true">
+          <span>V</span><span>ISION</span>
+        </div>
+        <div className="hero-index" aria-hidden="true">
+          <span>01</span>
+          <i />
+          <small>04</small>
+        </div>
         <div className="hero-content">
           <div className="hero-copy">
             <p className="eyebrow"><span />{t.eyebrow}</p>
@@ -197,10 +346,10 @@ export default function Home() {
             </h1>
             <p className="hero-intro">{t.intro}</p>
             <div className="hero-actions">
-              <Button size="lg" className="primary-cta" onClick={() => scrollTo('products')}>
+              <Button data-cursor="view" size="lg" className="primary-cta" onClick={() => scrollTo('products')}>
                 {t.explore} <ArrowDownRight />
               </Button>
-              <Button variant="outline" size="lg" className="ghost-cta" onClick={() => scrollTo('wholesale')}>
+              <Button data-cursor="view" variant="outline" size="lg" className="ghost-cta" onClick={() => scrollTo('wholesale')}>
                 {t.quote}
               </Button>
             </div>
@@ -216,6 +365,8 @@ export default function Home() {
               <span className="corner corner-a" />
               <span className="corner corner-b" />
               <div className="scan-line" />
+              <div className="tracking-ring tracking-ring-a" />
+              <div className="tracking-ring tracking-ring-b" />
               <div className="focus-point"><span /></div>
             </div>
             <div className="console-metrics">
@@ -224,9 +375,27 @@ export default function Home() {
             </div>
           </aside>
         </div>
+        <div className="hero-coordinates" aria-hidden="true">
+          <span>23.1291° N</span>
+          <span>113.2644° E</span>
+          <span>LIVE / 24 FPS</span>
+        </div>
         <p className="hero-note">{t.heroNote}</p>
         <div className="scroll-cue"><span />SCROLL TO DISCOVER</div>
       </section>
+
+      <div className="signal-marquee" aria-label="Fuanruii security capabilities">
+        <div>
+          <span>INTELLIGENT VISION</span><i />
+          <span>EDGE AI DETECTION</span><i />
+          <span>24 / 7 PROTECTION</span><i />
+          <span>OEM · ODM · GLOBAL</span><i />
+          <span>INTELLIGENT VISION</span><i />
+          <span>EDGE AI DETECTION</span><i />
+          <span>24 / 7 PROTECTION</span><i />
+          <span>OEM · ODM · GLOBAL</span><i />
+        </div>
+      </div>
 
       <section id="solutions" className="platform-section reveal">
         <div className="section-heading">
@@ -262,6 +431,7 @@ export default function Home() {
             })}
           </div>
         </div>
+        <p className="mobile-swipe-hint">{t.swipeHint}</p>
       </section>
 
       <section className="capability-strip reveal" aria-label="Core capabilities">
@@ -292,7 +462,12 @@ export default function Home() {
           {products.map((product, index) => {
             const Icon = product.icon;
             return (
-              <article key={product.code} className={`product-card ${product.tone}`}>
+              <article
+                key={product.code}
+                className={`product-card ${product.tone}`}
+                onPointerMove={setCardMotion}
+                onPointerLeave={resetCardMotion}
+              >
                 <div className="product-card-top">
                   <span>{product.code}</span>
                   <span>{String(index + 1).padStart(2, '0')}</span>
@@ -319,6 +494,7 @@ export default function Home() {
             );
           })}
         </div>
+        <p className="mobile-swipe-hint product-swipe-hint">{t.swipeHint}</p>
       </section>
 
       <section id="wholesale" className="wholesale-section reveal">
@@ -341,8 +517,8 @@ export default function Home() {
             <p><Check />{t.dispatch}</p>
             <p><Check />{t.payments}</p>
           </div>
-          <Button className="contact-button" onClick={() => navigator.clipboard?.writeText('miki-zeng')}>
-            {language === 'zh' ? '复制微信号' : 'Copy WeChat ID'} <ArrowRight />
+          <Button className={`contact-button ${copied ? 'copied' : ''}`} onClick={copyWechat}>
+            {copied ? (language === 'zh' ? '已复制' : 'Copied') : (language === 'zh' ? '复制微信号' : 'Copy WeChat ID')} <ArrowRight />
           </Button>
         </aside>
       </section>
@@ -358,6 +534,12 @@ export default function Home() {
           <span>© 2026 Fuanruii Security</span>
         </div>
       </footer>
+
+      <button type="button" className="mobile-quote-dock" onClick={() => scrollTo('wholesale')}>
+        <span className="live-dot" />
+        <strong>{t.quickQuote}</strong>
+        <ArrowRight />
+      </button>
     </main>
   );
 }
